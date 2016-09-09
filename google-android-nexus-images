@@ -18,4 +18,4 @@ firstdevice=`echo $devices | awk '{print $1}'`
 text=`echo "$imagescontent" | sed -n '/id=\"'$firstdevice'\"/,/\/div/p' | grep -v "</div>"`
 json=`echo "<xml>" "$text" "</xml>" | xml2json --pretty | sed -e 's;"#;";g' -e 's;"@;";g' | grep -v '"text": "\\\n \{2,\}",\|"tail": "\\\n' `
 
-echo "$json" | jq '.xml|[ .h2 ,.table] | transpose | map(add) | .[]| [{ "id": .id, "name": .text, "data": ( (try .tr[]), (try .tr)  | {"version": .td[0].text, "link": .td[1].a.href, "checksum": .td[2].text } )} ]'
+echo "$json" | jq '.xml|[ .h2 ,.table] | transpose | map(add) | .[]| [{ "id": .id, "name": .text, "data": ( (try .tr[]), (try .tr)  | {"version": .td[0].text, "compileid": .id , "link": .td[1].a.href, "checksum": .td[2].text } )} ]'
