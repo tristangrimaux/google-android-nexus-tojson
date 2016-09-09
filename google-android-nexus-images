@@ -2,8 +2,7 @@
 
 #filetypes can be ota or images, both work
 
-filetype={$1:-images} 
-
+filetype=${1:-images} 
 url="https://developers.google.com/android/nexus/$filetype"
 
 #Cache for temporary use, you can avoid it by calling directly the wget
