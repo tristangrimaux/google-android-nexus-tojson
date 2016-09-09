@@ -1,0 +1,21 @@
+#!/bin/bash
+url="https://developers.google.com/android/nexus/images"
+
+#Cache for temporary use, you can avoid it by calling directly the wget
+# uses xml2json and jq
+
+tempfile="/tmp/nexusimagesfile"
+
+if [[ -n $(find $tempfile -mmin -10 -size +0b 2>/dev/null ) ]]; then
+  imagescontent=`cat $tempfile `
+else
+  imagescontent=`wget "$url" -O - -q`
+  echo "$imagescontent" > $tempfile
+fi
+
+devices=`echo "$imagescontent" | grep '<h2 id=".*">' | grep -v "legal\|instructions" | sed -e 's;<h2 id=";;' -e 's;">".*;;'`
+firstdevice=`echo $devices | awk '{print $1}'`
+text=`echo "$imagescontent" | sed -n '/id=\"'$firstdevice'\"/,/\/div/p' | grep -v "</div>"`
+json=`echo "<xml>" "$text" "</xml>" | xml2json --pretty | sed -e 's;"#;";g' -e 's;"@;";g' | grep -v '"text": "\\\n \{2,\}",\|"tail": "\\\n' `
+
+echo "$json" | jq '.xml|[ .h2 ,.table] | transpose | map(add) | .[]| [{ "id": .id, "name": .text, "data": ( (try .tr[]), (try .tr)  | {"version": .td[0].text, "link": .td[1].a.href, "checksum": .td[2].text } )} ]'

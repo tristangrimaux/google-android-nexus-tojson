@@ -1,0 +1,55 @@
+#!/bin/bash
+url="https://developers.google.com/android/nexus/images"
+
+#Cache for temporary use, you can avoid it by calling directly the wget
+tempfile="/tmp/nexusimagesfile"
+
+if [[ -n $(find $tempfile -mmin -10 -size +0b 2>/dev/null ) ]]; then
+  imagescontent=`cat $tempfile `
+else
+  imagescontent=`wget "$url" -O - -q`
+  echo "$imagescontent" > $tempfile
+fi
+
+devices=`echo "$imagescontent" | grep '<h2 id=".*">' | grep -v "legal\|instructions" | sed -e 's;<h2 id=";;' -e 's;">".*;;'`
+firstdevice=`echo $devices | awk '{print $1}'`
+text=`echo "$imagescontent" | sed -n '/id=\"'$firstdevice'\"/,/\/div/p' | grep -v "</div>"`
+
+json=`echo "<xml>" "$text" "</xml>" | xml2json --pretty | sed -e 's;"#;";g' -e 's;"@;";g' | grep -v '"text": "\\\n \{2,\}",\|"tail": "\\\n' `
+
+echo "$json" | jq '.xml|[ .h2 ,.table] | transpose | map(add) | .[]| [{ "id": .id, "name": .text, "data": ( (try .tr[]), (try .tr)  | {"version": .td[0].text, "link": .td[1].a.href, "checksum": .td[2].text } )} ]'
+
+exit 0
+
+echo "{"
+for item in $devices; do
+  if [ -z "$firstuse" ];then
+    firstuse=no
+  else
+    echo ","
+  fi
+  echo \"$item\"':['
+  text=`echo "$imagescontent" | sed -n '/id=\"'$item'\"/,/\/table/p'`
+  echo "<xml>" `echo "$text"` "</xml>" | xml2json | sed -e 's;"#;";g' -e 's;"@;";g' | jq '.xml.table' | jq '(try .tr[]|{version: .td[0].text, link: .td[1].a.href, SHA256Checksum:.td[2].text}), (try {version: .tr.td[0].text, link: .tr.td[1].a.href, xx: .tr.td[2].text})'| sed 's;};},;g'
+  echo '{}]'
+done
+echo "}" 
+
+#echo "$result" | sed -e '$!N;s/\},\n{}\]\,/\}\],/;P;D' | sed -e '$!N;s/\}\],\n\endofstory}/\}\]\n\}/;P;D' 
+
+
+
+exit 0
+result=$(echo "{"
+for item in $devices; do
+  echo \"$item\"':['
+  text=`echo "$imagescontent" | sed -n '/id=\"'$item'\"/,/\/table/p'`
+  echo "<xml>" `echo "$text"` "</xml>" | xml2json | sed -e 's;"#;";g' -e 's;"@;";g' | jq '.xml.table' | jq '(try .tr[]|{version: .td[0].text, link: .td[1].a.href, SHA256Checksum:.td[2].text}), (try {version: .tr.td[0].text, link: .tr.td[1].a.href, xx: .tr.td[2].text})'| sed 's;};},;g'
+  echo '{}],'
+done
+echo "endofstory}" ) 
+
+echo "$result" | sed -e '$!N;s/\},\n{}\]\,/\}\],/;P;D' | sed -e '$!N;s/\}\],\n\endofstory}/\}\]\n\}/;P;D' 
+
+#este comando produce una salida unificada de dos archivos que repiten cosas. WOW
+#jq 'def flatten: reduce .[] as $i([]; if $i | type == "array" then . + ($i | flatten) else . + [$i] end);  [.[] | to_entries] | flatten | reduce .[] as $dot ({}; .[$dot.key] += $dot.value)'
